@@ -74,25 +74,27 @@ func fetchDays() throws {
 
 func printDay(start: Date, end: Date, work: TimeInterval) {
     let dateOptions: ISO8601DateFormatter.Options = [.withFullDate ]
-    let timeOptions: ISO8601DateFormatter.Options = [.withColonSeparatorInTime, .withTime]
     
-    let timeFormatter = DateComponentsFormatter()
-    timeFormatter.allowedUnits = [.hour, .minute]
-    timeFormatter.zeroFormattingBehavior = .pad
-    timeFormatter.unitsStyle = .positional
-    
+    let durationFormatter = DateComponentsFormatter()
+    durationFormatter.allowedUnits = [.hour, .minute]
+    durationFormatter.zeroFormattingBehavior = .pad
+    durationFormatter.unitsStyle = .positional
+
+    let timeFormatter = DateFormatter()
+    timeFormatter.dateFormat = "HH:mm"
+
     let dayFormatter = DateFormatter()
     dayFormatter.setLocalizedDateFormatFromTemplate("EEEE")
 
     let dateString = ISO8601DateFormatter.string(from: start, timeZone: TimeZone.current, formatOptions: dateOptions)
 
-    let startTimeString = ISO8601DateFormatter.string(from: start, timeZone: TimeZone.current, formatOptions: timeOptions)
-    let stopTimeString = ISO8601DateFormatter.string(from: end, timeZone: TimeZone.current, formatOptions: timeOptions)
+    let startTimeString = timeFormatter.string(for: start)!
+    let stopTimeString = timeFormatter.string(for: end)!
 
     let diff = end.timeIntervalSinceReferenceDate - start.timeIntervalSinceReferenceDate
 
-    let timeString = timeFormatter.string(from: diff) ?? ""
-    let workString = timeFormatter.string(from: work) ?? ""
+    let timeString = durationFormatter.string(from: diff) ?? ""
+    let workString = durationFormatter.string(from: work) ?? ""
     
     let dayString = dayFormatter.string(from: start)
     let week = Calendar.init(identifier: .iso8601).component(.weekOfYear, from: start)
