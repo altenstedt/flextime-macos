@@ -13,6 +13,47 @@ localISOFormatter.timeZone = TimeZone.current
 let interval: UInt32 = 60
 let flush_interval = 3000
 
+func createMeasurement(idle: CFTimeInterval) -> Measurement {
+    let now = Date()
+
+    var measurement = Measurement()
+    measurement.idle = UInt32(idle)
+    measurement.kind = Measurement.Kind.measurement
+    measurement.timestamp = UInt32(now.timeIntervalSince1970)
+    
+    return measurement
+}
+
+func flushMeasurements() throws {
+    let data = try measurements.serializedData()
+    
+    let options: ISO8601DateFormatter.Options = [.withFullDate, .withTime, .withTimeZone]
+    let fileName = ISO8601DateFormatter.string(from: Date(), timeZone: TimeZone.init(identifier: "UTC")!, formatOptions: options)
+    
+    let identifier = Bundle.main.bundleIdentifier ?? "com.inhill.flextime"
+    
+    let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("\(identifier)/measurements/")
+    
+    try FileManager.default.createDirectory (at: directory, withIntermediateDirectories: true, attributes: nil)
+
+    let path = directory.appendingPathComponent("\(fileName).bin")
+    try data.write(to: path)
+    
+    print("Flushed measurements to \(fileName.description).bin")
+}
+
+func getProductName() -> String {
+    return Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "Flextime"
+}
+
+func getProductVersion() -> String {
+    return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.14.0"
+}
+
+func getProductBuildNumber() -> String {
+    return Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
+}
+
 var measurements = Measurements()
 measurements.interval = interval
 measurements.zone = TimeZone.current.identifier
@@ -64,44 +105,3 @@ DispatchQueue.global(qos: .userInitiated).async {
 }
 
 dispatchMain()
-
-func createMeasurement(idle: CFTimeInterval) -> Measurement {
-    let now = Date()
-
-    var measurement = Measurement()
-    measurement.idle = UInt32(idle)
-    measurement.kind = Measurement.Kind.measurement
-    measurement.timestamp = UInt32(now.timeIntervalSince1970)
-    
-    return measurement
-}
-
-func flushMeasurements() throws {
-    let data = try measurements.serializedData()
-    
-    let options: ISO8601DateFormatter.Options = [.withFullDate, .withTime, .withTimeZone]
-    let fileName = ISO8601DateFormatter.string(from: Date(), timeZone: TimeZone.init(identifier: "UTC")!, formatOptions: options)
-    
-    let identifier = Bundle.main.bundleIdentifier ?? "com.inhill.flextime"
-    
-    let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("\(identifier)/measurements/")
-    
-    try FileManager.default.createDirectory (at: directory, withIntermediateDirectories: true, attributes: nil)
-
-    let path = directory.appendingPathComponent("\(fileName).bin")
-    try data.write(to: path)
-    
-    print("Flushed measurements to \(fileName.description).bin")
-}
-
-func getProductName() -> String {
-    return Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "Flextime"
-}
-
-func getProductVersion() -> String {
-    return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.14.0"
-}
-
-func getProductBuildNumber() -> String {
-    return Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
-}
