@@ -7,9 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5B2FAA852686279C00A54674 /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = 5B2FAA842686279C00A54674 /* ArgumentParser */; };
+		5B2FAA882686676600A54674 /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = 5B2FAA872686676600A54674 /* ArgumentParser */; };
+		5B2FAA8A2686676A00A54674 /* SwiftProtobuf in Frameworks */ = {isa = PBXBuildFile; productRef = 5B2FAA892686676A00A54674 /* SwiftProtobuf */; };
 		5B71233A268471C70027DBA6 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B712339268471C70027DBA6 /* main.swift */; };
-		5B71233E268471DC0027DBA6 /* measurement.proto in Sources */ = {isa = PBXBuildFile; fileRef = 5B9FA7DC267F226F004737AC /* measurement.proto */; };
-		5B712340268471E10027DBA6 /* measurement.proto in Sources */ = {isa = PBXBuildFile; fileRef = 5B71233F268471E10027DBA6 /* measurement.proto */; };
 		5B712342268471E90027DBA6 /* measurement.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B712341268471E90027DBA6 /* measurement.pb.swift */; };
 		5B9FA7D6267E7C1C004737AC /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B9FA7D5267E7C1C004737AC /* main.swift */; };
 		5B9FA7E0267F2323004737AC /* measurement.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B9FA7DF267F2323004737AC /* measurement.pb.swift */; };
@@ -54,6 +55,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5B2FAA882686676600A54674 /* ArgumentParser in Frameworks */,
+				5B2FAA8A2686676A00A54674 /* SwiftProtobuf in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -61,6 +64,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5B2FAA852686279C00A54674 /* ArgumentParser in Frameworks */,
 				5BF6D5EC267F2D2B00CC2813 /* SwiftProtobuf in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -68,6 +72,13 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		5B2FAA862686676600A54674 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		5B712338268471C70027DBA6 /* flextimed */ = {
 			isa = PBXGroup;
 			children = (
@@ -85,6 +96,7 @@
 				5B9FA7D4267E7C1C004737AC /* flextime */,
 				5B712338268471C70027DBA6 /* flextimed */,
 				5B9FA7D3267E7C1C004737AC /* Products */,
+				5B2FAA862686676600A54674 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -123,6 +135,10 @@
 			dependencies = (
 			);
 			name = flextimed;
+			packageProductDependencies = (
+				5B2FAA872686676600A54674 /* ArgumentParser */,
+				5B2FAA892686676A00A54674 /* SwiftProtobuf */,
+			);
 			productName = flextimed;
 			productReference = 5B712337268471C70027DBA6 /* flextimed */;
 			productType = "com.apple.product-type.tool";
@@ -142,6 +158,7 @@
 			name = flextime;
 			packageProductDependencies = (
 				5BF6D5EB267F2D2B00CC2813 /* SwiftProtobuf */,
+				5B2FAA842686279C00A54674 /* ArgumentParser */,
 			);
 			productName = flextime;
 			productReference = 5B9FA7D2267E7C1C004737AC /* flextime */;
@@ -175,6 +192,7 @@
 			mainGroup = 5B9FA7C9267E7C1C004737AC;
 			packageReferences = (
 				5BF6D5EA267F2D2B00CC2813 /* XCRemoteSwiftPackageReference "swift-protobuf" */,
+				5B2FAA832686279C00A54674 /* XCRemoteSwiftPackageReference "swift-argument-parser" */,
 			);
 			productRefGroup = 5B9FA7D3267E7C1C004737AC /* Products */;
 			projectDirPath = "";
@@ -192,7 +210,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				5B71233A268471C70027DBA6 /* main.swift in Sources */,
-				5B71233E268471DC0027DBA6 /* measurement.proto in Sources */,
 				5B712342268471E90027DBA6 /* measurement.pb.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -201,7 +218,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5B712340268471E10027DBA6 /* measurement.proto in Sources */,
 				5B9FA7D6267E7C1C004737AC /* main.swift in Sources */,
 				5B9FA7E0267F2323004737AC /* measurement.pb.swift in Sources */,
 			);
@@ -398,6 +414,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		5B2FAA832686279C00A54674 /* XCRemoteSwiftPackageReference "swift-argument-parser" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-argument-parser";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.4.3;
+			};
+		};
 		5BF6D5EA267F2D2B00CC2813 /* XCRemoteSwiftPackageReference "swift-protobuf" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/apple/swift-protobuf";
@@ -409,6 +433,21 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		5B2FAA842686279C00A54674 /* ArgumentParser */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5B2FAA832686279C00A54674 /* XCRemoteSwiftPackageReference "swift-argument-parser" */;
+			productName = ArgumentParser;
+		};
+		5B2FAA872686676600A54674 /* ArgumentParser */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5B2FAA832686279C00A54674 /* XCRemoteSwiftPackageReference "swift-argument-parser" */;
+			productName = ArgumentParser;
+		};
+		5B2FAA892686676A00A54674 /* SwiftProtobuf */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5BF6D5EA267F2D2B00CC2813 /* XCRemoteSwiftPackageReference "swift-protobuf" */;
+			productName = SwiftProtobuf;
+		};
 		5BF6D5EB267F2D2B00CC2813 /* SwiftProtobuf */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 5BF6D5EA267F2D2B00CC2813 /* XCRemoteSwiftPackageReference "swift-protobuf" */;

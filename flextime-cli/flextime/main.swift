@@ -6,9 +6,30 @@
 //
 
 import Foundation
+import ArgumentParser
+
+struct Options: ParsableArguments {
+    @Flag(name: .shortAndLong, help: ArgumentHelp("Split weeks with a new line."))
+    var splitWeeks = false
+
+    @Option(name: .shortAndLong, help: "Idle limit in minutes.")
+    var idle = 10.0
+
+    @Flag(name: .shortAndLong, help: "Print version information and exit.")
+    var version = false
+}
+
+// If you prefer writing in a "script" style, you can call `parseOrExit()` to
+// parse a single `ParsableArguments` type from command-line arguments.
+let options = Options.parseOrExit()
+
+if (options.version) {
+    print("\(getProductName()) \(getProductVersion())")
+    exit(0)
+}
 
 var foo = [Measurement]()
-let fixed = 60.0 * 10
+let fixed = 60.0 * options.idle
 
 func fetchDays() throws {
     let identifier = "com.inhill.flextime" // Coordinated with Flextime daemon
@@ -49,7 +70,9 @@ func fetchDays() throws {
             work = 0.0
             
             if (Calendar.current.compare(date, to: current, toGranularity: .weekOfYear) != .orderedSame) {
-                print() // newline
+                if (options.splitWeeks) {
+                    print() // newline
+                }
             }
         } else {
             // Same day
@@ -100,6 +123,18 @@ func printDay(start: Date, end: Date, work: TimeInterval) {
     let week = Calendar.init(identifier: .iso8601).component(.weekOfYear, from: start)
 
     print("\(dateString) \(startTimeString) — \(stopTimeString) \(timeString) | \(workString) w/\(week) \(dayString)")
+}
+
+func getProductName() -> String {
+    return Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "Flextime"
+}
+
+func getProductVersion() -> String {
+    return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.14.0"
+}
+
+func getProductBuildNumber() -> String {
+    return Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
 }
 
 try fetchDays();
