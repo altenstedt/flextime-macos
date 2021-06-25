@@ -8,6 +8,7 @@
 import Foundation
 
 var foo = [Measurement]()
+let fixed = 60.0 * 10
 
 func fetchDays() throws {
     let identifier = "com.inhill.flextime" // Coordinated with Flextime daemon
@@ -32,39 +33,56 @@ func fetchDays() throws {
     
     var current = Date(timeIntervalSince1970: TimeInterval(foo.first!.timestamp))
     var start = current
+    var work = TimeInterval(0.0)
     
     for (index, measurement) in foo.enumerated() {
         let date = Date(timeIntervalSince1970: TimeInterval(measurement.timestamp))
 
         if (Calendar.current.compare(date, to: current, toGranularity: .day) != .orderedSame) {
+            // Different day
+            
             // start points to the first measurement on the previous day.
             // current points to the last measurement on the previous day.
-            printDay(start: start, end: current)
+            printDay(start: start, end: current, work: work)
             
             start = date // New day
+            work = 0.0
             
             if (Calendar.current.compare(date, to: current, toGranularity: .weekOfYear) != .orderedSame) {
                 print() // newline
+            }
+        } else {
+            // Same day
+            if (index > 0) {
+                let previousStopTime = TimeInterval(foo[index - 1].timestamp)
+                let stopTime = TimeInterval(measurement.timestamp)
+
+                if (stopTime - previousStopTime < fixed) {
+                  work += stopTime - previousStopTime;
+                }
             }
         }
         
         if (index == foo.endIndex - 1) {
             // Last item
-            printDay(start: start, end: date)
+            printDay(start: start, end: date, work: work)
         }
         
         current = date;
     }
 }
 
-func printDay(start: Date, end: Date) {
-    let dateOptions: ISO8601DateFormatter.Options = [.withFullDate]
+func printDay(start: Date, end: Date, work: TimeInterval) {
+    let dateOptions: ISO8601DateFormatter.Options = [.withFullDate ]
     let timeOptions: ISO8601DateFormatter.Options = [.withColonSeparatorInTime, .withTime]
     
     let timeFormatter = DateComponentsFormatter()
     timeFormatter.allowedUnits = [.hour, .minute]
     timeFormatter.zeroFormattingBehavior = .pad
     timeFormatter.unitsStyle = .positional
+    
+    let dayFormatter = DateFormatter()
+    dayFormatter.setLocalizedDateFormatFromTemplate("EEEE")
 
     let dateString = ISO8601DateFormatter.string(from: start, timeZone: TimeZone.current, formatOptions: dateOptions)
 
@@ -74,9 +92,12 @@ func printDay(start: Date, end: Date) {
     let diff = end.timeIntervalSinceReferenceDate - start.timeIntervalSinceReferenceDate
 
     let timeString = timeFormatter.string(from: diff) ?? ""
+    let workString = timeFormatter.string(from: work) ?? ""
     
-    print("\(dateString) \(startTimeString) \(stopTimeString) \(timeString)")
+    let dayString = dayFormatter.string(from: start)
+    let week = Calendar.init(identifier: .iso8601).component(.weekOfYear, from: start)
 
+    print("\(dateString) \(startTimeString) — \(stopTimeString) \(timeString) | \(workString) w/\(week) \(dayString)")
 }
 
 try fetchDays();
