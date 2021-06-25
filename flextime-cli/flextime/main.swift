@@ -7,101 +7,77 @@
 
 import Foundation
 
-let localISOFormatter = ISO8601DateFormatter()
-localISOFormatter.timeZone = TimeZone.current
+var foo = [Measurement]()
 
-let interval: UInt32 = 60
-let flush_interval = 3000
-
-var measurements = Measurements()
-measurements.interval = interval
-measurements.zone = TimeZone.current.identifier
-
-print("\(getProductName()) daemon \(getProductVersion()) started")
-let dispatchGroup = DispatchGroup()
-
-signal(SIGINT, SIG_IGN)
-
-let signalSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
-signalSource.setEventHandler {
-    try! flushMeasurements()
-    dispatchGroup.leave()
+func fetchDays() throws {
+    let identifier = "com.inhill.flextime" // Coordinated with Flextime daemon
     
-    print("\(getProductName()) daemon \(getProductVersion()) terminated")
+    let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("\(identifier)/measurements/")
 
-    exit(EXIT_SUCCESS)
-}
-signalSource.resume()
+    let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
 
-dispatchGroup.enter()
+    let filtered = files.filter{ $0.pathExtension == "bin" }
+    
+    for file in filtered {
+        let data = try Data(contentsOf: file)
 
-DispatchQueue.global(qos: .userInitiated).async {
-    do {
-        while(true) {
-            let anyInputEventType = CGEventType(rawValue: ~0)!
-            let secondsSinceLastEventType = CGEventSource.secondsSinceLastEventType(CGEventSourceStateID.combinedSessionState, eventType: anyInputEventType)
+        let measurements = try Measurements(serializedData: data)
+        
+        foo.append(contentsOf: measurements.measurements)
+    }
+    
+    foo.sort {
+        return $0.timestamp < $1.timestamp
+    }
+    
+    var current = Date(timeIntervalSince1970: TimeInterval(foo.first!.timestamp))
+    var start = current
+    
+    for (index, measurement) in foo.enumerated() {
+        let date = Date(timeIntervalSince1970: TimeInterval(measurement.timestamp))
 
-            // The time between measurement is not perfect, so be on the safe side,
-            // we compare to a somewhat larger value.
-            let active = secondsSinceLastEventType < Double(interval) * 1.2;
+        if (Calendar.current.compare(date, to: current, toGranularity: .day) != .orderedSame) {
+            // start points to the first measurement on the previous day.
+            // current points to the last measurement on the previous day.
+            printDay(start: start, end: current)
             
-            if (active) {
-                let measurement = createMeasurement(idle: secondsSinceLastEventType);
-                
-                measurements.measurements.append(measurement)
-                
-                if (measurements.measurements.last!.timestamp - measurements.measurements.first!.timestamp > flush_interval) {
-                    try flushMeasurements()
-                }
+            start = date // New day
+            
+            if (Calendar.current.compare(date, to: current, toGranularity: .weekOfYear) != .orderedSame) {
+                print() // newline
             }
-
-            sleep(interval)
         }
-    } catch {
-        print(error)
-        exit(EXIT_FAILURE)
+        
+        if (index == foo.endIndex - 1) {
+            // Last item
+            printDay(start: start, end: date)
+        }
+        
+        current = date;
     }
 }
 
-dispatchMain()
-
-func createMeasurement(idle: CFTimeInterval) -> Measurement {
-    let now = Date()
-
-    var measurement = Measurement()
-    measurement.idle = UInt32(idle)
-    measurement.kind = Measurement.Kind.measurement
-    measurement.timestamp = UInt32(now.timeIntervalSince1970)
+func printDay(start: Date, end: Date) {
+    let dateOptions: ISO8601DateFormatter.Options = [.withFullDate]
+    let timeOptions: ISO8601DateFormatter.Options = [.withColonSeparatorInTime, .withTime]
     
-    return measurement
+    let timeFormatter = DateComponentsFormatter()
+    timeFormatter.allowedUnits = [.hour, .minute]
+    timeFormatter.zeroFormattingBehavior = .pad
+    timeFormatter.unitsStyle = .positional
+
+    let dateString = ISO8601DateFormatter.string(from: start, timeZone: TimeZone.current, formatOptions: dateOptions)
+
+    let startTimeString = ISO8601DateFormatter.string(from: start, timeZone: TimeZone.current, formatOptions: timeOptions)
+    let stopTimeString = ISO8601DateFormatter.string(from: end, timeZone: TimeZone.current, formatOptions: timeOptions)
+
+    let diff = end.timeIntervalSinceReferenceDate - start.timeIntervalSinceReferenceDate
+
+    let timeString = timeFormatter.string(from: diff) ?? ""
+    
+    print("\(dateString) \(startTimeString) \(stopTimeString) \(timeString)")
+
 }
 
-func flushMeasurements() throws {
-    let data = try measurements.serializedData()
-    
-    let options: ISO8601DateFormatter.Options = [.withFullDate, .withTime, .withTimeZone]
-    let fileName = ISO8601DateFormatter.string(from: Date(), timeZone: TimeZone.init(identifier: "UTC")!, formatOptions: options)
-    
-    let identifier = Bundle.main.bundleIdentifier ?? "com.inhill.flextime"
-    
-    let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("\(identifier)/measurements/")
-    
-    try FileManager.default.createDirectory (at: directory, withIntermediateDirectories: true, attributes: nil)
+try fetchDays();
 
-    let path = directory.appendingPathComponent("\(fileName).bin")
-    try data.write(to: path)
-    
-    print("Flushed measurements to \(fileName.description).bin")
-}
-
-func getProductName() -> String {
-    return Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "Flextime"
-}
-
-func getProductVersion() -> String {
-    return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.14.0"
-}
-
-func getProductBuildNumber() -> String {
-    return Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
-}
