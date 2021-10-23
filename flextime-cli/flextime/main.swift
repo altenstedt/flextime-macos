@@ -17,6 +17,26 @@ struct Options: ParsableArguments {
 
     @Flag(name: .shortAndLong, help: "Print version information and exit.")
     var version = false
+
+    @Flag(name: .shortAndLong, help: "Log in to the Flextime online service.")
+    var login = false
+    
+    @Option(name: .long, help: "Base URL for the login token service.")
+    var tokenBaseUrl = "https://localhost:5000/"
+}
+
+struct DeviceAuthorizationResponse: Codable {
+    let deviceCode: String
+    let userCode: String
+    let verificationUri: String
+    let expiresIn: UInt32
+    let interval: UInt32
+}
+
+struct TokenResponse: Codable {
+    let accessToken: String
+    let tokenType: String
+    let expiresIn: UInt32
 }
 
 // If you prefer writing in a "script" style, you can call `parseOrExit()` to
@@ -26,6 +46,163 @@ let options = Options.parseOrExit()
 if (options.version) {
     print("\(getProductName()) \(getProductVersion())")
     exit(0)
+}
+
+if (options.login) {
+    let url = URL(string: "/connect/deviceauthorization", relativeTo: URL(string: options.tokenBaseUrl))
+
+    let headers = ["Content-Type": "application/x-www-form-urlencoded"]
+
+    var authorizationComponents = URLComponents()
+    authorizationComponents.queryItems = [URLQueryItem(name: "client_id", value: "test")]
+
+    var authorizationRequest = URLRequest(url: url!)
+    authorizationRequest.httpMethod = "POST"
+    authorizationRequest.allHTTPHeaderFields = headers
+    authorizationRequest.httpBody = authorizationComponents.query?.data(using: .utf8)
+    
+    let semaphore = DispatchSemaphore(value: 0)
+
+    let authorizationTask = deviceAuthorization() { authorizationResponse, _, _ in
+        if let authorizationResponse = authorizationResponse {
+            do {
+                print("Use a web browser to open the page \(authorizationResponse.verificationUri) and enter the code \(authorizationResponse.userCode) to authenticate.")
+                
+                var done = false
+                repeat {
+                    let tokenTask = pollToken(deviceCode: authorizationResponse.deviceCode) { tokenResponse, foo, error in
+                        if let tokenResponse = tokenResponse {
+                            print("Access token \(tokenResponse.accessToken)")
+                            semaphore.signal()
+                            done = true
+                        }
+                    }
+                    
+                    tokenTask.resume()
+                    
+                    print("Sleep for \(authorizationResponse.interval)")
+                    sleep(authorizationResponse.interval)
+                } while !done
+            }
+        }
+    }
+    
+        /*
+    let authorizationTask = URLSession.shared.dataTask(with: authorizationRequest) { authorizationData, authorizationResponse, authorizationError in
+        if let data = authorizationData {
+            do {
+                let decoder = JSONDecoder()
+                decoder.keyDecodingStrategy = .convertFromSnakeCase
+                let authorizationResponse = try decoder.decode(DeviceAuthorizationResponse.self, from: data)
+                
+                print("Use a web browser to open the page \(authorizationResponse.verificationUri) and enter the code \(authorizationResponse.userCode) to authenticate.")
+                
+                var pollComponents = URLComponents()
+                pollComponents.queryItems = [
+                    URLQueryItem(name: "client_id", value: "test"),
+                    URLQueryItem(name: "grant_type", value: "urn:ietf:params:oauth:grant-type:device_code"),
+                    URLQueryItem(name: "device_code", value: authorizationResponse.deviceCode)
+                ]
+
+                var pollRequest = URLRequest(url: url!)
+                pollRequest.httpMethod = "POST"
+                pollRequest.allHTTPHeaderFields = headers
+                pollRequest.httpBody = pollComponents.query?.data(using: .utf8)
+                
+                repeat {
+                    let loopTask = URLSession.shared.dataTask(with: pollRequest) { loopData, loopResponse, loopError in
+                        if let loopData = loopData {
+                            print("Loop")
+                        }
+                    }
+                    
+                    loopTask.resume()
+                    Thread.current.sleep(TimeInterval(authorizationResponse.interval))
+                } while true
+                
+            } catch let error {
+                print(error)
+            }
+        } else if let error = authorizationError {
+            print("HTTP Request Failed \(error)")
+        }
+        
+        semaphore.signal()
+    }
+ */
+    
+    authorizationTask.resume()
+
+    semaphore.wait()
+    exit(0)
+}
+
+func deviceAuthorization(completionHandler: @escaping (DeviceAuthorizationResponse?, URLResponse?, Error?) -> Void) -> URLSessionDataTask{
+    let url = URL(string: "/connect/deviceauthorization", relativeTo: URL(string: options.tokenBaseUrl))
+
+    let headers = ["Content-Type": "application/x-www-form-urlencoded"]
+
+    var components = URLComponents()
+    components.queryItems = [URLQueryItem(name: "client_id", value: "test")]
+
+    var request = URLRequest(url: url!)
+    request.httpMethod = "POST"
+    request.allHTTPHeaderFields = headers
+    request.httpBody = components.query?.data(using: .utf8)
+    
+    let task = URLSession.shared.dataTask(with: request) { data, response, error in
+        if let data = data {
+            do {
+                let decoder = JSONDecoder()
+                decoder.keyDecodingStrategy = .convertFromSnakeCase
+                let authorizationResponse = try decoder.decode(DeviceAuthorizationResponse.self, from: data)
+                
+                return completionHandler(authorizationResponse, response, error)
+            } catch let error {
+                return completionHandler(nil, response, error)
+            }
+        } else if let error = error {
+            return completionHandler(nil, response, error)
+        }
+    }
+    
+    return task
+}
+
+func pollToken(deviceCode: String, completionHandler: @escaping (TokenResponse?, URLResponse?, Error?) -> Void) -> URLSessionDataTask{
+    let url = URL(string: "/connect/token", relativeTo: URL(string: options.tokenBaseUrl))
+
+    let headers = ["Content-Type": "application/x-www-form-urlencoded"]
+
+    var components = URLComponents()
+    components.queryItems = [
+        URLQueryItem(name: "client_id", value: "test"),
+        URLQueryItem(name: "grant_type", value: "urn:ietf:params:oauth:grant-type:device_code"),
+        URLQueryItem(name: "device_code", value: deviceCode)
+    ]
+
+    var request = URLRequest(url: url!)
+    request.httpMethod = "POST"
+    request.allHTTPHeaderFields = headers
+    request.httpBody = components.query?.data(using: .utf8)
+    
+    let task = URLSession.shared.dataTask(with: request) { data, response, error in
+        if let data = data {
+            do {
+                let decoder = JSONDecoder()
+                decoder.keyDecodingStrategy = .convertFromSnakeCase
+                let tokenResponse = try decoder.decode(TokenResponse.self, from: data)
+                
+                return completionHandler(tokenResponse, response, error)
+            } catch let error {
+                return completionHandler(nil, response, error)
+            }
+        } else if let error = error {
+            return completionHandler(nil, response, error)
+        }
+    }
+    
+    return task
 }
 
 var foo = [Measurement]()
