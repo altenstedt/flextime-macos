@@ -1,16 +1,26 @@
-//
-//  main.swift
-//  flextime
-//
-//  Created by Martin Altenstedt on 2021-06-19.
-//
-
 import Foundation
+import os.log
 
+// log stream --info --predicate 'subsystem == "com.inhill.flextime"'
+let loggerSubsystem = Bundle.main.bundleIdentifier ?? "com.inhill.flextime"
+let logger = Logger(subsystem: loggerSubsystem, category: "daemon")
+ 
 let localISOFormatter = ISO8601DateFormatter()
 localISOFormatter.timeZone = TimeZone.current
 
 let interval: UInt32 = 60
+
+func getProductName() -> String {
+    return Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "Flextime"
+}
+
+func getProductVersion() -> String {
+    return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.14.0"
+}
+
+func getProductBuildNumber() -> String {
+    return Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
+}
 
 func createMeasurement(idle: CFTimeInterval) -> Measurement {
     let now = Date()
@@ -52,45 +62,35 @@ func flushMeasurements() throws {
         last_path = path
         last_flush = Date()
         
-        print("Flushed \(measurements.measurements.count) measurements to \(path.lastPathComponent)")
     } else {
         // Write to an existing file
         do {
             try data.write(to: last_path!)
         } catch {
-            print("Error writing to path \(last_path!.lastPathComponent), retrying with a new file...")
+            logger.notice("Error writing to \(last_path!.lastPathComponent, privacy: .public), retrying...")
             
             let path = try getPath()
             
+            // This means that we just wrote duplicate data to a second file.  The
+            // first file contains some of the same data.  But this is something that
+            // the client is expected to handle and is a very rare error case.
             try data.write(to: path)
-            
+
             last_path = path
+
+            logger.notice("Retry successful to \(last_path!.lastPathComponent, privacy: .public)")
         }
 
-        print("Flushed \(measurements.measurements.count) measurements to \(last_path!.lastPathComponent)")
-
         if last_flush! < Date().addingTimeInterval(-60 * 60 * 1) {
+            logger.info("Wrote \(measurements.measurements.count) measurements to \(last_path!.lastPathComponent, privacy: .public)")
+
             // Create a new file for subsequent writes so that we do not create big files
             last_flush = nil
             last_path = nil
             
             measurements.measurements.removeAll()
-
-            print("Clear measurements for new file")
         }
     }
-}
-
-func getProductName() -> String {
-    return Bundle.main.infoDictionary?["CFBundleName"] as? String ?? "Flextime"
-}
-
-func getProductVersion() -> String {
-    return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.14.0"
-}
-
-func getProductBuildNumber() -> String {
-    return Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
 }
 
 var last_flush: Date? = nil
@@ -100,7 +100,9 @@ var measurements = Measurements()
 measurements.interval = interval
 measurements.zone = TimeZone.current.identifier
 
-print("\(getProductName()) daemon \(getProductVersion()) started")
+logger.info("\(getProductName(), privacy: .public) daemon \(getProductVersion(), privacy: .public) started")
+print("\(getProductName()) daemon \(getProductVersion()) started (log subsystem: \(loggerSubsystem))")
+
 let dispatchGroup = DispatchGroup()
 
 signal(SIGINT, SIG_IGN)
@@ -109,8 +111,8 @@ let signalSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
 signalSource.setEventHandler {
     try! flushMeasurements()
     dispatchGroup.leave()
-    
-    print("\(getProductName()) daemon \(getProductVersion()) terminated")
+
+    logger.info("\(getProductName(), privacy: .public) daemon \(getProductVersion(), privacy: .public) terminated")
 
     exit(EXIT_SUCCESS)
 }
