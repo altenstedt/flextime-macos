@@ -105,10 +105,7 @@ print("\(getProductName()) daemon \(getProductVersion()) started (log subsystem:
 
 let dispatchGroup = DispatchGroup()
 
-signal(SIGINT, SIG_IGN)
-
-let signalSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
-signalSource.setEventHandler {
+func shutdown() {
     try! flushMeasurements()
     dispatchGroup.leave()
 
@@ -116,7 +113,19 @@ signalSource.setEventHandler {
 
     exit(EXIT_SUCCESS)
 }
-signalSource.resume()
+
+// When running in launchd, we get a SIGTERM before a SIGKILL
+// https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/Lifecycle.html
+signal(SIGINT, SIG_IGN)
+signal(SIGTERM, SIG_IGN)
+
+let signalIntSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
+signalIntSource.setEventHandler { shutdown() }
+signalIntSource.resume()
+
+let signalTermSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+signalTermSource.setEventHandler { shutdown() }
+signalTermSource.resume()
 
 dispatchGroup.enter()
 
