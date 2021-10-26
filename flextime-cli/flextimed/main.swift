@@ -11,7 +11,6 @@ let localISOFormatter = ISO8601DateFormatter()
 localISOFormatter.timeZone = TimeZone.current
 
 let interval: UInt32 = 60
-let flush_interval = 3000
 
 func createMeasurement(idle: CFTimeInterval) -> Measurement {
     let now = Date()
@@ -24,9 +23,7 @@ func createMeasurement(idle: CFTimeInterval) -> Measurement {
     return measurement
 }
 
-func flushMeasurements() throws {
-    let data = try measurements.serializedData()
-    
+func getPath() throws -> URL {
     let options: ISO8601DateFormatter.Options = [.withFullDate, .withTime, .withTimeZone]
     let fileName = ISO8601DateFormatter.string(from: Date(), timeZone: TimeZone.init(identifier: "UTC")!, formatOptions: options)
     
@@ -36,10 +33,52 @@ func flushMeasurements() throws {
     
     try FileManager.default.createDirectory (at: directory, withIntermediateDirectories: true, attributes: nil)
 
-    let path = directory.appendingPathComponent("\(fileName).bin")
-    try data.write(to: path)
+    return directory.appendingPathComponent("\(fileName).bin")
+}
+
+func flushMeasurements() throws {
+    if (measurements.measurements.count == 0) {
+        return
+    }
+
+    let data = try measurements.serializedData()
     
-    print("Flushed measurements to \(fileName.description).bin")
+    if last_flush == nil || last_path == nil {
+        // Write to a new file
+        let path = try getPath()
+
+        try data.write(to: path)
+        
+        last_path = path
+        last_flush = Date()
+        
+        print("Flushed \(measurements.measurements.count) measurements to \(path.lastPathComponent)")
+    } else {
+        // Write to an existing file
+        do {
+            try data.write(to: last_path!)
+        } catch {
+            print("Error writing to path \(last_path!.lastPathComponent), retrying with a new file...")
+            
+            let path = try getPath()
+            
+            try data.write(to: path)
+            
+            last_path = path
+        }
+
+        print("Flushed \(measurements.measurements.count) measurements to \(last_path!.lastPathComponent)")
+
+        if last_flush! < Date().addingTimeInterval(-60 * 60 * 1) {
+            // Create a new file for subsequent writes so that we do not create big files
+            last_flush = nil
+            last_path = nil
+            
+            measurements.measurements.removeAll()
+
+            print("Clear measurements for new file")
+        }
+    }
 }
 
 func getProductName() -> String {
@@ -53,6 +92,9 @@ func getProductVersion() -> String {
 func getProductBuildNumber() -> String {
     return Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
 }
+
+var last_flush: Date? = nil
+var last_path: URL? = nil
 
 var measurements = Measurements()
 measurements.interval = interval
@@ -91,9 +133,7 @@ DispatchQueue.global(qos: .userInitiated).async {
                 
                 measurements.measurements.append(measurement)
                 
-                if (measurements.measurements.last!.timestamp - measurements.measurements.first!.timestamp > flush_interval) {
-                    try flushMeasurements()
-                }
+                try flushMeasurements()
             }
 
             sleep(interval)
