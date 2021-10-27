@@ -39,7 +39,7 @@ func getProductName() -> String {
 }
 
 func getProductVersion() -> String {
-    return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.14.0"
+    return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.15.0"
 }
 
 func getProductBuildNumber() -> String {
