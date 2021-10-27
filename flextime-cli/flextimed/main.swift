@@ -147,7 +147,16 @@ DispatchQueue.global(qos: .userInitiated).async {
                 try flushMeasurements()
             }
 
-            sleep(interval)
+            // We want to create measurements as close to the minute as possble.  The
+            // reason is that when the user runs a client to inspect working hours,
+            // we want the end time to match the clock.  Since we typically resolve
+            // down to a minute, we want each measurement _and_ flush to disk to
+            // happen _just_ as a new minute on the clock starts.
+            let next = Date().addingTimeInterval(TimeInterval(interval))
+            let nearestMinuteSince1970 = (next.timeIntervalSince1970 / 60).rounded(.toNearestOrAwayFromZero) * 60
+            let nearestMinute = Date(timeIntervalSince1970: nearestMinuteSince1970)
+                
+            Thread.sleep(until: nearestMinute)
         }
     } catch {
         print(error)
