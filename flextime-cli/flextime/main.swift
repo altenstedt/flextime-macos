@@ -1,10 +1,3 @@
-//
-//  main.swift
-//  flextime
-//
-//  Created by Martin Altenstedt on 2021-06-19.
-//
-
 import Foundation
 import ArgumentParser
 
@@ -23,6 +16,15 @@ struct Options: ParsableArguments {
     
     @Option(name: .long, help: "Base URL for the login token service.")
     var tokenBaseUrl = "https://localhost:5000/"
+
+    @Option(name: .long, help: "Mark STOP.")
+    var stop = ""
+
+    @Option(name: .long, help: "Mark MEASUREMENT.")
+    var mark = ""
+    
+    @Flag(name: .long, help: "Do not read data from local files.")
+    var noLocalData = false
 }
 
 struct DeviceAuthorizationResponse: Codable {
@@ -46,6 +48,34 @@ let options = Options.parseOrExit()
 if (options.version) {
     print("\(getProductName()) \(getProductVersion())")
     exit(0)
+}
+
+let formatter = DateFormatter()
+formatter.dateStyle = .short
+formatter.timeStyle = .short
+
+let stop: Date?
+if options.stop.count > 0 {
+    stop = formatter.date(from: options.stop)
+    
+    if stop == nil {
+        print("Unable to parse \(options.stop).  Try --stop \"\(formatter.string(from: Date()))\".")
+        exit(EXIT_FAILURE)
+    }
+} else {
+    stop = nil
+}
+
+let mark: Date?
+if options.mark.count > 0 {
+    mark = formatter.date(from: options.mark)
+    
+    if mark == nil {
+        print("Unable to parse \(options.mark).  Try --mark \"\(formatter.string(from: Date()))\".")
+        exit(EXIT_FAILURE)
+    }
+} else {
+    mark = nil
 }
 
 if (options.login) {
@@ -209,43 +239,80 @@ var foo = [Measurement]()
 let fixed = 60.0 * options.idle
 
 func fetchDays() throws {
-    let identifier = "com.inhill.flextime" // Coordinated with Flextime daemon
+    let readLocalData = !options.noLocalData
     
-    let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("\(identifier)/measurements/")
-
-    let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-
-    let filtered = files.filter{ $0.pathExtension == "bin" }
-    
-    for file in filtered {
-        let data = try Data(contentsOf: file)
-
-        let measurements = try Measurements(serializedData: data)
+    if readLocalData {
+        let identifier = "com.inhill.flextime" // Coordinated with Flextime daemon
         
-        foo.append(contentsOf: measurements.measurements)
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("\(identifier)/measurements/")
+
+        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+
+        let filtered = files.filter{ $0.pathExtension == "bin" }
+        
+        for file in filtered {
+            let data = try Data(contentsOf: file)
+
+            let measurements = try Measurements(serializedData: data)
+            
+            foo.append(contentsOf: measurements.measurements)
+        }
     }
-    
+
+    if stop != nil {
+        let tmp = Measurement.with {
+            $0.timestamp = UInt32(stop!.timeIntervalSince1970)
+            $0.kind = .UNRECOGNIZED(99)
+        }
+
+        foo.append(tmp)
+    }
+
+    if mark != nil {
+        let tmp = Measurement.with {
+            $0.timestamp = UInt32(mark!.timeIntervalSince1970)
+            $0.kind = .UNRECOGNIZED(98)
+        }
+
+        foo.append(tmp)
+    }
+
     foo.sort {
         return $0.timestamp < $1.timestamp
+    }
+    
+    if foo.isEmpty {
+        print("No data found")
+        exit(EXIT_SUCCESS)
     }
     
     var current = Date(timeIntervalSince1970: TimeInterval(foo.first!.timestamp))
     var start = current
     var work = TimeInterval(0.0)
+
+    var skip_day = false
+    var formatOptions: FormatOptions = []
     
     for (index, measurement) in foo.enumerated() {
         let date = Date(timeIntervalSince1970: TimeInterval(measurement.timestamp))
 
         if (Calendar.current.compare(date, to: current, toGranularity: .day) != .orderedSame) {
             // Different day
+            skip_day = false
             
             // start points to the first measurement on the previous day.
             // current points to the last measurement on the previous day.
-            printDay(start: start, end: current, work: work)
-            
-            start = date // New day
+            printDay(start: start, end: current, work: work, options: formatOptions)
+
+            // New day
             work = 0.0
-            
+            start = date
+            if measurement.kind == .UNRECOGNIZED(98) {
+                formatOptions.insert(.startBold)
+            } else {
+                formatOptions.remove(.startBold)
+            }
+
             if (Calendar.current.compare(date, to: current, toGranularity: .weekOfYear) != .orderedSame) {
                 if (options.splitWeeks) {
                     print() // newline
@@ -253,6 +320,15 @@ func fetchDays() throws {
             }
         } else {
             // Same day
+            if skip_day {
+                if index == foo.endIndex - 1 {
+                    // Last measurement AND the last day is a skip
+                    printDay(start: start, end: current, work: work, options: formatOptions)
+                }
+                
+                continue
+            }
+            
             if (index > 0) {
                 let previousStopTime = TimeInterval(foo[index - 1].timestamp)
                 let stopTime = TimeInterval(measurement.timestamp)
@@ -261,18 +337,42 @@ func fetchDays() throws {
                   work += stopTime - previousStopTime;
                 }
             }
+
+            if (index == foo.endIndex - 1) {
+                // Last item
+                if measurement.kind == .UNRECOGNIZED(99) {
+                    formatOptions.insert(.endBold)
+                } else {
+                    formatOptions.remove(.endBold)
+                }
+
+                printDay(start: start, end: date, work: work, options: formatOptions)
+            }
+
+            if measurement.kind == .UNRECOGNIZED(99) {
+                skip_day = true
+            }
         }
-        
-        if (index == foo.endIndex - 1) {
-            // Last item
-            printDay(start: start, end: date, work: work)
-        }
-        
+
         current = date;
+        if measurement.kind == .UNRECOGNIZED(99) {
+            formatOptions.insert(.endBold)
+        } else {
+            formatOptions.remove(.endBold)
+        }
     }
 }
 
-func printDay(start: Date, end: Date, work: TimeInterval) {
+struct FormatOptions: OptionSet {
+    let rawValue: Int
+
+    static let startBold = FormatOptions(rawValue: 1 << 0)
+    static let endBold   = FormatOptions(rawValue: 1 << 1)
+    
+    static let none: FormatOptions = []
+}
+
+func printDay(start: Date, end: Date, work: TimeInterval, options: FormatOptions = .none) {
     let dateOptions: ISO8601DateFormatter.Options = [.withFullDate ]
     
     let durationFormatter = DateComponentsFormatter()
@@ -299,7 +399,16 @@ func printDay(start: Date, end: Date, work: TimeInterval) {
     let dayString = dayFormatter.string(from: start)
     let week = Calendar.init(identifier: .iso8601).component(.weekOfYear, from: start)
 
-    print("\(dateString) \(startTimeString) — \(stopTimeString) \(timeString) | \(workString) w/\(week) \(dayString)")
+    let startFormat = options.contains(.startBold)
+        ? "\u{001B}[1m\(startTimeString)\u{001B}[0m"
+        : "\(startTimeString)"
+
+    let endFormat = options.contains(.endBold)
+        ? "\u{001B}[1m\(stopTimeString)\u{001B}[0m"
+        : "\(stopTimeString)"
+    
+
+    print("\(dateString) \(startFormat) — \(endFormat) \(timeString) | \(workString) w/\(week) \(dayString)")
 }
 
 func getProductName() -> String {
@@ -307,7 +416,7 @@ func getProductName() -> String {
 }
 
 func getProductVersion() -> String {
-    return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.14.0"
+    return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.15.0"
 }
 
 func getProductBuildNumber() -> String {
