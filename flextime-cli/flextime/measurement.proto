@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+message Measurement {
+  enum Kind {
+    NONE = 0;
+    MEASUREMENT = 1;
+    START = 2;
+    STOP = 3;
+  }
+  
+  uint32 timestamp = 1;
+  Kind kind = 2;
+  uint32 idle = 3;
+}
+
+message Measurements {
+  uint32 interval = 1;
+  string zone = 2;
+  repeated Measurement measurements = 3;
+}
